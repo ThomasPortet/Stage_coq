@@ -1,16 +1,14 @@
 
 From mathcomp Require Import all_ssreflect all_algebra.
 Require Export Field.
-
+Require Import ring.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-Require Import NArithRing.
 Import Order.TTheory GRing.Theory Num.Theory Num.ExtraDef Num.
 
 Open Scope ring_scope.
-
 
 Record pt := Bpt {p_x : rat; p_y : rat}.
 
@@ -171,7 +169,7 @@ Definition compare_outgoing (e1 e2 : edge) : bool :=
   let: Bedge _ b _ := e1 in
    b <<= e2.
 
-
+(*
 
 Check @Bedge (Bpt 3%:Q 4%:Q) (Bpt 4%:Q 4%:Q) isT.
 
@@ -179,7 +177,7 @@ Compute compare_incoming  (@Bedge  (Bpt 2%:Q 1%:Q) (Bpt 3%:Q 3%:Q) isT) (@Bedge 
 
 
 Compute compare_outgoing (@Bedge  (Bpt 1%:Q 1%:Q) (Bpt 3%:Q 1%:Q) isT ) (@Bedge  (Bpt 1%:Q 1%:Q) (Bpt 3%:Q 3%:Q) isT).
-
+*)
 Definition sort_incoming (inc : seq edge) : seq edge :=
   sort compare_incoming inc.
 Definition sort_outgoing (out : seq edge) : seq edge :=
@@ -191,269 +189,17 @@ Definition E2 : edge := (@Bedge  (Bpt (@Rat (7%:Z, 3%:Z) isT)  10%:Q) (Bpt 3%:Q 
 Definition E3 : edge := (@Bedge  (Bpt 1%:Q 1%:Q) (Bpt 3%:Q 3%:Q) isT).
 
 Definition sorted_inc := map left_pt (sort_incoming [:: E1; E2; E3]).
+(*
 Eval lazy in sorted_inc.
-
+*)
 Definition E4 : edge := (@Bedge  (Bpt 2%:Q 3%:Q) (Bpt 4%:Q 6%:Q) isT).
 Definition E5 : edge := (@Bedge  (Bpt 2%:Q 3%:Q) (Bpt 5%:Q 3%:Q) isT).
 Definition E6 : edge := (@Bedge  (Bpt 2%:Q 3%:Q) (Bpt 4%:Q 3%:Q) isT).
 Definition sorted_out := map right_pt (sort_outgoing [:: E4; E5; E6]).
+(*
 Eval lazy in sorted_out.
+*)
 
-
-Section ring_sandbox.
-
-Variable R : numFieldType.
-Definition R' := (R : Type).
-
-Let mul : R' -> R' -> R' := @GRing.mul _.
-Let add : R' -> R' -> R' := @GRing.add _.
-Let sub : R' -> R' -> R' := (fun x y => x - y).
-Let opp : R' -> R' := @GRing.opp _.
-Let zero : R' := 0.
-Let one : R' := 1.
-
-
-Let R2_theory :=
-   @mk_rt R' zero one add mul sub opp
-    (@eq R')
-    (@add0r R) (@addrC R) (@addrA R) (@mul1r R) (@mulrC R)
-      (@mulrA R) (@mulrDl R) (fun x y : R' => erefl (x - y)) (@addrN R).
-
-Add Ring R2_Ring : R2_theory.
-
-Ltac mc_ring :=
-rewrite ?mxE /= ?(expr0, exprS, mulrS, mulr0n) -?[@GRing.add _]/add
-    -?[@GRing.mul _]/mul
-    -?[@GRing.opp _]/opp -?[1]/one -?[0]/zero;
-match goal with |- @eq ?X _ _ => change X with R' end;
-ring.
-
-Let inv : R' -> R' := @GRing.inv _.
-Let div : R' -> R' -> R' := fun x y => mul x (inv y).
-
-Definition R2_sft : field_theory zero one add mul sub opp div inv (@eq R').
-Proof.
-constructor.
-- exact R2_theory.
-- have // : one <> zero by apply/eqP; rewrite oner_eq0.
-- have // : forall p q : R', div p q = mul p (inv q) by [].
-- have // : forall p : R', p <> zero -> mul (inv p) p = one.
-  by move=> *; apply/mulVf/eqP.
-Qed.
-
-Add Field Qfield : R2_sft.
-
-Ltac mc_field :=
-rewrite ?mxE /= ?(expr0, exprS, mulrS, mulr0n) -?[@GRing.add _]/add
-    -?[@GRing.mul _]/mul -[@GRing.inv _]/inv
-    -?[@GRing.opp _]/opp -?[1]/one -?[0]/zero;
-match goal with |- @eq ?X _ _ => change X with R' end;
-field.
-
-Example field_playground (x y : R' ) : x != 0 -> y != 0 -> (x * y) / (x * y) = 1.
-Proof.
-move=> xn0 yn0; mc_field.
-by split; apply/eqP.
-Qed.
-
-(* returns true if p is under A B *)
-Definition pue_f (p_x p_y a_x a_y b_x b_y : R')  : R' :=
-     (b_x * p_y - p_x * b_y - (a_x * p_y - p_x * a_y) + a_x * b_y - b_x * a_y).
-
-Lemma pue_f_o p_x p_y a_x a_y b_x b_y:  pue_f p_x p_y a_x a_y b_x b_y = - pue_f  b_x b_y a_x a_y p_x p_y.
-Proof.
-  rewrite /pue_f.
-  mc_ring.
-Qed.
-
-Lemma pue_f_c p_x p_y a_x a_y b_x b_y:  pue_f p_x p_y a_x a_y b_x b_y =  pue_f   b_x b_y p_x p_y a_x a_y.
-Proof.
-  rewrite /pue_f.
-  mc_ring.
-Qed.
-
-Lemma pue_f_inter p_x  a_x a_y b_x b_y :  b_x != a_x -> (pue_f p_x ((p_x - a_x)* ((b_y - a_y)/(b_x - a_x)) + a_y) a_x a_y b_x b_y) == 0.
-Proof.
-rewrite /pue_f.
-rewrite -subr_eq0 => h.
-set slope := (_ / _).
-
-rewrite (mulrDr b_x).
-rewrite (mulrDr a_x).
-rewrite -(orbF (_==0)).
-rewrite -(negbTE   h).
-rewrite -mulf_eq0 .
-rewrite ! ( mulrBl (b_x - a_x), fun x y => mulrDl  x y (b_x - a_x)).
-
-rewrite /slope !mulrA !mulfVK //.
-apply/eqP; mc_ring.
-Qed.
-
-Lemma pue_f_inters p_x p_y a_x a_y b_x b_y  :  b_x != a_x -> p_y = ((p_x - a_x) * ((b_y - a_y) / (b_x - a_x)) + a_y) ->
-pue_f p_x p_y a_x a_y b_x b_y == 0.
-Proof.
-move => h ->.
-by apply pue_f_inter; rewrite h.
-
-
-Qed.
-
-Lemma pue_f_eq p_x p_y a_x a_y :
-pue_f p_x p_y p_x p_y a_x a_y == 0.
-Proof.
-rewrite /pue_f /=.
-
-apply /eqP.
-mc_ring.
-Qed.
-
-Lemma pue_f_two_points p_x p_y a_x a_y :
-pue_f p_x p_y p_x p_y a_x a_y == 0 /\ pue_f p_x p_y a_x a_y p_x p_y == 0 /\
-pue_f p_x p_y a_x a_y a_x a_y == 0.
-Proof.
-split.
-apply pue_f_eq.
-split.
-have := pue_f_c p_x p_y  a_x a_y p_x p_y.
-move => ->.
-apply pue_f_eq.
-have := pue_f_c  a_x a_y  a_x a_y p_x p_y.
-move => <-.
-apply pue_f_eq.
-Qed.
-
-Lemma pue_f_vert p_y a_x a_y b_x b_y :
- (pue_f  a_x a_y b_x b_y b_x p_y) == (b_x - a_x) * (p_y - b_y).
-Proof.
-rewrite /pue_f.
-apply /eqP.
-mc_ring.
-Qed.
-
-
-Lemma ax4 p_x p_y q_x q_y r_x r_y t_x t_y :
-pue_f t_x t_y q_x q_y r_x r_y + pue_f p_x p_y t_x t_y r_x r_y
-+ pue_f p_x p_y q_x q_y t_x t_y == pue_f p_x p_y q_x q_y r_x r_y.
-Proof.
-rewrite /pue_f.
-apply /eqP.
-  mc_ring.
-Qed.
-
-Lemma pue_f_linear l a b c d e f :
-l * pue_f a b c d e f = pue_f a (l*b) c (l*d) e (l*f).
-Proof.
-rewrite /pue_f.
-mc_ring.
-Qed.
-
-Lemma pue_f_on_edge_y a_x a_y b_x b_y m_x m_y :
-pue_f a_x a_y b_x b_y m_x m_y == 0 ->
-(b_x - a_x) * m_y = m_x * (b_y -a_y)- (a_x * b_y - b_x *a_y).
-Proof.
-move => /eqP abmeq0.
-apply /eqP.
-rewrite -subr_eq0.
-apply /eqP.
-rewrite -abmeq0 /pue_f.
-mc_ring.
-Qed.
-
-Lemma pue_f_on_edge a_x a_y b_x b_y c_x c_y d_x d_y m_x m_y :
-pue_f a_x a_y b_x b_y m_x m_y == 0 ->
-(b_x - a_x) * pue_f c_x c_y d_x d_y m_x m_y ==
-(m_x - a_x) * pue_f c_x c_y d_x d_y b_x b_y + (b_x - m_x) * pue_f c_x c_y d_x d_y a_x a_y.
-Proof.
-move => on_ed.
-rewrite pue_f_linear  /pue_f (pue_f_on_edge_y on_ed).
-apply /eqP.
-mc_ring.
-Qed.
-
-Lemma pue_f_triangle_on_edge a_x a_y b_x b_y p_x p_y p'_x p'_y :
-pue_f a_x a_y b_x b_y p'_x p'_y == 0 ->
-(b_x - a_x) * pue_f a_x a_y p_x p_y p'_x p'_y ==
-(p'_x - a_x) * pue_f a_x a_y p_x p_y b_x b_y .
-Proof.
-move=> on_ed.
-rewrite pue_f_linear  /pue_f (pue_f_on_edge_y on_ed).
-apply /eqP.
-mc_ring.
-Qed.
-
-Lemma pue_f_triangle_on_edge' a_x a_y b_x b_y p_x p_y p'_x p'_y :
-pue_f a_x a_y b_x b_y p'_x p'_y == 0 ->
-(b_x - a_x) * pue_f p_x p_y b_x b_y p'_x p'_y ==
-(b_x - p'_x) * pue_f a_x a_y p_x p_y b_x b_y .
-Proof.
-move => on_ed .
-rewrite pue_f_linear  /pue_f (pue_f_on_edge_y on_ed).
-apply /eqP.
-mc_ring.
-Qed.
-
-
-Lemma pue_f_on_edge_same_point_counter_example :
-  ~ (forall a_x a_y b_x b_y p_x p_y p_x' p_y',
-    a_x != b_x ->  (* The two points are not on the same vertical *)
-    pue_f a_x a_y b_x b_y p_x p_y == 0 ->
-    pue_f a_x a_y b_x b_y p_x' p_y' == 0 ->
-    (p_y == p_y') = (p_x == p_x')).
-Proof.
-move=> bad_thm.
-have := bad_thm 1%:R 0 2%:R 0 1%:R 0 2%:R 0.
-rewrite (eqr_nat R 1%N 2%N) /=.
-have -> : pue_f 1%:R 0 2%:R 0 1%:R 0 == 0.
-  apply/eqP; rewrite /pue_f.
-  mc_ring.
-have -> : pue_f 1%:R 0 2%:R 0 2%:R 0 == 0.
-  apply/eqP; rewrite /pue_f.
-  mc_ring.
-move=> /(_ isT isT isT).
-rewrite eqxx.
-by[].
-Qed.
-
-Lemma pue_f_on_edge_same_point a_x a_y b_x b_y p_x p_y p_x' p_y':
-a_x != b_x ->
-pue_f a_x a_y b_x b_y p_x p_y == 0 ->
-pue_f a_x a_y b_x b_y p_x' p_y' == 0 ->
-(p_x == p_x') -> (p_y == p_y').
-Proof.
-move => axnbx puep0 puep'0.
-have pyeq := (pue_f_on_edge_y puep0 ).
-have p'yeq := (pue_f_on_edge_y puep'0 ).
-move=> xxs; have yys : (b_x - a_x) * p_y = (b_x - a_x) * p_y'.
-  by rewrite pyeq (eqP xxs) p'yeq.
-move: (axnbx); rewrite eq_sym -subr_eq0=> bxmax.
-apply/eqP.
-by apply: (mulfI bxmax).
-Qed.
-
-Lemma pue_f_ax5 p_x p_y q_x q_y a_x a_y b_x b_y c_x c_y :
-  pue_f p_x p_y a_x a_y b_x b_y *
-  pue_f p_x p_y q_x q_y c_x c_y +
-  pue_f p_x p_y b_x b_y c_x c_y *
-  pue_f p_x p_y q_x q_y a_x a_y =
-  pue_f p_x p_y a_x a_y c_x c_y *
-  pue_f p_x p_y q_x q_y b_x b_y.
-Proof.
-rewrite /pue_f; mc_ring.
-Qed.
-
-Lemma pue_f_triangle_decompose a_x a_y b_x b_y c_x c_y d_x d_y :
-  pue_f a_x a_y c_x c_y d_x d_y = 0 ->
-  pue_f a_x a_y b_x b_y c_x c_y =
-  pue_f a_x a_y b_x b_y d_x d_y +
-  pue_f b_x b_y c_x c_y d_x d_y.
-Proof.
-move=> online.
-rewrite -(eqP (ax4 _ _ _ _ _ _ d_x d_y)).
-rewrite addrC; congr (_ + _).
-by rewrite addrC pue_f_o pue_f_c online oppr0 add0r -pue_f_c.
-Qed.
-
-End ring_sandbox.
 
 Lemma pue_formulaE a b c : pue_formula a b c =
    pue_f (p_x a) (p_y a) (p_x b) (p_y b) (p_x c) (p_y c).
@@ -599,7 +345,6 @@ Qed.
 
 Lemma compare_outgoing_total p : {in [pred e | left_pt e == p] &, total compare_outgoing} .
 Proof.
-Check sort_sorted_in.
 rewrite /total.
 move => ab cd /eqP lp /eqP lp2.
 have: left_pt ab = left_pt cd.
@@ -1460,6 +1205,33 @@ Definition closing_cells (p : pt) (contact_cells: seq cell) : (seq cell) :=
                     end
     end.
 
+
+Fixpoint open_cells_decomposition_contact open_cells pt contact high_e : seq cell * seq cell * edge :=
+match open_cells with
+        | [::] => (contact, [::], high_e)
+        | Bcell lpt rpt low high :: q  =>
+                if (contains_point pt (Bcell lpt rpt low high)) then
+                    open_cells_decomposition_contact q pt (rcons contact (Bcell lpt rpt low high)) high
+                else (contact, open_cells, high_e)
+        end.
+
+Fixpoint open_cells_decomposition_fix open_cells pt first_cells : seq cell * seq cell * seq cell * edge * edge :=
+
+match open_cells with
+        | [::] => (first_cells, [::], [::], dummy_edge, dummy_edge)
+        | Bcell lpt rpt low high :: q  =>
+            if (contains_point pt (Bcell lpt rpt low high)) then
+                   let '(contact, last_cells, high_e) := open_cells_decomposition_contact q pt [::] high in
+                   (first_cells, (Bcell lpt rpt low high)::contact,last_cells, low, high_e)
+            else open_cells_decomposition_fix q pt (rcons first_cells ( Bcell lpt rpt low high))
+end.
+
+(* only works if cells are sorted *)
+Definition open_cells_decomposition (open_cells : seq cell) (p : pt) : seq cell * seq cell * seq cell * edge * edge :=
+  match open_cells with
+    | [::] => ([::],[::],[::], dummy_edge, dummy_edge)
+    | _  => open_cells_decomposition_fix open_cells p [::]
+  end.
 (* at each step we create the cell under the first outgoing edge and when there's only one left,
 we create the two last cells *)
 Fixpoint opening_cells (p : pt) (out : seq edge) (low_e : edge) (high_e : edge) : (seq cell) :=
@@ -1494,33 +1266,6 @@ end.
 
 *)
 
-
-Fixpoint open_cells_decomposition_contact open_cells pt contact high_e : seq cell * seq cell * edge :=
-match open_cells with
-        | [::] => (contact, [::], high_e)
-        | Bcell lpt rpt low high :: q  =>
-                if (contains_point pt (Bcell lpt rpt low high)) then
-                    open_cells_decomposition_contact q pt (rcons contact (Bcell lpt rpt low high)) high
-                else (contact, open_cells, high_e)
-        end.
-
-Fixpoint open_cells_decomposition_fix open_cells pt first_cells : seq cell * seq cell * seq cell * edge * edge :=
-
-match open_cells with
-        | [::] => (first_cells, [::], [::], dummy_edge, dummy_edge)
-        | Bcell lpt rpt low high :: q  =>
-            if (contains_point pt (Bcell lpt rpt low high)) then
-                   let '(contact, last_cells, high_e) := open_cells_decomposition_contact q pt [::] high in
-                   (first_cells, (Bcell lpt rpt low high)::contact,last_cells, low, high_e)
-            else open_cells_decomposition_fix q pt (rcons first_cells ( Bcell lpt rpt low high))
-end.
-
-(* only works if cells are sorted *)
-Definition open_cells_decomposition (open_cells : seq cell) (p : pt) : seq cell * seq cell * seq cell * edge * edge :=
-  match open_cells with
-    | [::] => ([::],[::],[::], dummy_edge, dummy_edge)
-    | _  => open_cells_decomposition_fix open_cells p [::]
-  end.
 (*
 Fixpoint extract_last_cell (open_cells : seq cell) (contact_cells : seq cell) : seq cell  :=
   match open_cells with
