@@ -2,6 +2,8 @@ From mathcomp Require Import all_ssreflect all_algebra.
 Require Export Field.
 Import GRing.Theory Num.Theory.
 Require Import cells.
+Require Import definitions.
+Require Import algorithm.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
@@ -12,33 +14,6 @@ Import Order.TTheory GRing.Theory Num.Theory Num.ExtraDef Num.
 Open Scope ring_scope.
 Section proof_environment.
 Variable bottom top : edge.
-
-Fixpoint open_cells_decomposition_contact open_cells pt contact high_e : seq cell * seq cell * edge :=
-    match open_cells with
-            | [::] => (contact, [::], high_e)
-            | Bcell lpt rpt low high :: q  =>
-                    if (contains_point pt (Bcell lpt rpt low high)) then
-                        open_cells_decomposition_contact q pt (rcons contact (Bcell lpt rpt low high)) high
-                    else (contact, open_cells, high_e)
-            end.
-    
-    Fixpoint open_cells_decomposition_fix open_cells pt first_cells : seq cell * seq cell * seq cell * edge * edge :=
-    
-    match open_cells with
-            | [::] => (first_cells, [::], [::], dummy_edge, dummy_edge)
-            | Bcell lpt rpt low high :: q  =>
-                if (contains_point pt (Bcell lpt rpt low high)) then
-                       let '(contact, last_cells, high_e) := open_cells_decomposition_contact q pt [::] high in
-                       (first_cells, (Bcell lpt rpt low high)::contact,last_cells, low, high_e)
-                else open_cells_decomposition_fix q pt (rcons first_cells ( Bcell lpt rpt low high))
-    end.
-    
-    (* only works if cells are sorted *)
-    Definition open_cells_decomposition (open_cells : seq cell) (p : pt) : seq cell * seq cell * seq cell * edge * edge :=
-      match open_cells with
-        | [::] => ([::],[::],[::], dummy_edge, dummy_edge)
-        | _  => open_cells_decomposition_fix open_cells p [::]
-      end.
 
 
 Lemma h_c_contact open_cells pt high_e contact_cells :

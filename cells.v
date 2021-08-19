@@ -1,7 +1,9 @@
 
 From mathcomp Require Import all_ssreflect all_algebra.
 Require Export Field.
+Require Import definitions.
 Require Import ring.
+Require Import algorithm.
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
@@ -10,195 +12,8 @@ Import Order.TTheory GRing.Theory Num.Theory Num.ExtraDef Num.
 
 Open Scope ring_scope.
 
-Record pt := Bpt {p_x : rat; p_y : rat}.
-
-Definition pt_eqb (a b : pt) : bool :=
-  let: Bpt a_x a_y := a in
-  let: Bpt b_x b_y := b in
-     (a_x == b_x) && (a_y == b_y).
-
-Lemma pt_eqP : Equality.axiom pt_eqb.
-Proof.
-rewrite /Equality.axiom.
-move=> [a_x a_y] [b_x b_y] /=.
-have [/eqP <-|/eqP anb] := boolP(a_x == b_x).
-
-  have [/eqP <- | /eqP anb] := boolP(a_y == b_y).
-    by apply: ReflectT.
-  by apply : ReflectF => [][].
-by apply: ReflectF=> [][].
-Qed.
-
-Canonical pt_eqType := EqType pt (EqMixin pt_eqP).
-
-Record edge := Bedge {left_pt : pt; right_pt : pt;
-    _ : p_x left_pt < p_x right_pt}.
-
-Definition edge_eqb (e1 e2 : edge) : bool :=
-   let: Bedge a1 b1 p1 := e1 in
-   let: Bedge a2 b2 p2 := e2 in
-   (a1 == a2) && (b1 == b2).
-
-Lemma edge_cond (e : edge) : p_x (left_pt e) < p_x (right_pt e).
-Proof.  by move: e => [l r c]. Qed.
-
-Lemma edge_eqP : Equality.axiom edge_eqb.
-Proof.
-move=> [a1 b1 p1] [a2 b2 p2] /=.
-have [/eqP a1a2 | /eqP a1na2] := boolP(a1 == a2).
-  have [/eqP b1b2 | /eqP b1nb2] := boolP(b1 == b2).
-     move: p1 p2. rewrite -a1a2 -b1b2 => p1 p2.
-     rewrite (eqtype.bool_irrelevance p1 p2).
-     by apply: ReflectT.
-   by apply: ReflectF=> [][].
-by apply: ReflectF=>[][].
-Qed.
-
-Canonical edge_eqType := EqType edge (EqMixin edge_eqP).
-
-Record cell := Bcell  {left_pts : list pt; right_pts : list pt; low : edge; high : edge}.
-
-Definition cell_eqb (ca cb : cell) : bool :=
-  let: Bcell lptsa rptsa lowa higha := ca in
-  let: Bcell lptsb rptsb lowb highb:= cb in
-  (lptsa == lptsb) && (rptsa == rptsb) && (lowa == lowb) && (higha == highb).
 
 
-Lemma cell_eqP : Equality.axiom cell_eqb.
-Proof.
-rewrite /Equality.axiom.
-move => [lptsa rptsa lowa higha] [lptsb rptsb lowb highb] /=.
-have [/eqP <-|/eqP anb] := boolP(lptsa == lptsb).
-  have [/eqP <-|/eqP anb] := boolP(rptsa == rptsb).
-    have [/eqP <-|/eqP anb] := boolP(lowa == lowb).
-      have [/eqP <-|/eqP anb] := boolP(higha == highb).
-        by apply:ReflectT.
-      by apply : ReflectF => [][].
-    by apply : ReflectF => [][].
-  by apply: ReflectF=> [][].
-by apply: ReflectF=> [][].
-Qed.
-
-Canonical cell_eqType := EqType cell (EqMixin cell_eqP).
-
-Record event := Bevent {point : pt; outgoing : seq edge}.
-
-Definition event_eqb (ea eb : event) : bool :=
-  let: Bevent pta outa := ea in
-  let: Bevent ptb outb := eb in
-  (pta == ptb) && (outa == outb).
-
-Lemma event_eqP : Equality.axiom event_eqb.
-Proof.
-rewrite /Equality.axiom.
-move => [pta outa] [ptb outb] /=.
-have [/eqP <-|/eqP anb] := boolP(pta == ptb).
-  have [/eqP <-|/eqP anb] := boolP(outa == outb).
-    by apply:ReflectT.
-  by apply : ReflectF => [][].
-by apply: ReflectF=> [][].
-Qed.
-
-Canonical event_eqType := EqType event (EqMixin event_eqP).
-
-(* As in insertion sort, the add_event function assumes that event are
-  sorted in evs (lexicographically, first coordinate, then second coordinate
-  of the point.  On the other hand, no effort is made to sort the various
-  edges in each list.  *)
-Fixpoint add_event (p : pt) (e : edge) (inc : bool) (evs : seq event) :
-  seq event :=
-  match evs with
-  | nil => if inc then [:: Bevent p [::]]
-           else [:: Bevent p [:: e]]
-  | ev1 :: evs' =>
-    let p1 := point ev1 in
-    if p == p1 then
-      if inc then Bevent p1 (outgoing ev1) :: evs'
-      else Bevent p1 (e :: outgoing ev1) :: evs' else
-    if p_x p < p_x p1 then
-      if inc then
-        Bevent p [::] :: evs else
-        Bevent p [:: e] :: evs
-    else if (p_x p == p_x p1) && (p_y p < p_y p1) then
-       if inc then
-         Bevent p [::] :: evs else
-         Bevent p [:: e] :: evs else
-    ev1 :: add_event p e inc evs'
-  end.
-
-(* We should be able to prove that the sequence of events produced by
-  edges to events is sorted lexicographically on the coordinates of
-  the points. *)
-Fixpoint edges_to_events (s : seq edge) : seq event :=
-  match s with
-  | nil => nil
-  | e :: s' =>
-    add_event (left_pt e) e false
-      (add_event (right_pt e) e true (edges_to_events s'))
-  end.
-
-
-(* returns true if p is under A B *)
-Definition pue_formula (p : pt) (a : pt) (b : pt) : rat :=
-  let: Bpt p_x p_y := p in
-  let: Bpt a_x a_y := a in
-  let: Bpt b_x b_y := b in
-     (b_x * p_y - p_x * b_y - (a_x * p_y - p_x * a_y) + a_x * b_y - b_x * a_y).
-
-
-(* returns true if p is under e *)
-Definition point_under_edge (p : pt) (e : edge) : bool :=
-  pue_formula p (left_pt e) (right_pt e) <= 0.
-
-  (* returns true if p is strictly under e *)
-Definition point_strictly_under_edge (p : pt) (e : edge) : bool :=
-  pue_formula p (left_pt e) (right_pt e) < 0.
-
-Notation "p '<<=' e" := (point_under_edge p e)( at level 70, no associativity).
-Notation "p '<<<' e" := (point_strictly_under_edge p e)(at level 70, no associativity).
-
-
-(*returns true if e1 is under e2*)
-
-Definition compare_incoming (e1 e2 : edge) : bool :=
-  let: Bedge a _ _ := e1 in
-   a <<= e2.
-
-(*returns true if e1 is under e2*)
-Definition compare_outgoing (e1 e2 : edge) : bool :=
-  let: Bedge _ b _ := e1 in
-   b <<= e2.
-
-(*
-
-Check @Bedge (Bpt 3%:Q 4%:Q) (Bpt 4%:Q 4%:Q) isT.
-
-Compute compare_incoming  (@Bedge  (Bpt 2%:Q 1%:Q) (Bpt 3%:Q 3%:Q) isT) (@Bedge  (Bpt 1%:Q 1%:Q) (Bpt 3%:Q 3%:Q) isT ).
-
-
-Compute compare_outgoing (@Bedge  (Bpt 1%:Q 1%:Q) (Bpt 3%:Q 1%:Q) isT ) (@Bedge  (Bpt 1%:Q 1%:Q) (Bpt 3%:Q 3%:Q) isT).
-*)
-Definition sort_incoming (inc : seq edge) : seq edge :=
-  sort compare_incoming inc.
-Definition sort_outgoing (out : seq edge) : seq edge :=
-  sort compare_outgoing out.
-
-
-Definition E1 : edge := (@Bedge  (Bpt 2%:Q 5%:Q) (Bpt 3%:Q 3%:Q) isT).
-Definition E2 : edge := (@Bedge  (Bpt (@Rat (7%:Z, 3%:Z) isT)  10%:Q) (Bpt 3%:Q 3%:Q) isT).
-Definition E3 : edge := (@Bedge  (Bpt 1%:Q 1%:Q) (Bpt 3%:Q 3%:Q) isT).
-
-Definition sorted_inc := map left_pt (sort_incoming [:: E1; E2; E3]).
-(*
-Eval lazy in sorted_inc.
-*)
-Definition E4 : edge := (@Bedge  (Bpt 2%:Q 3%:Q) (Bpt 4%:Q 6%:Q) isT).
-Definition E5 : edge := (@Bedge  (Bpt 2%:Q 3%:Q) (Bpt 5%:Q 3%:Q) isT).
-Definition E6 : edge := (@Bedge  (Bpt 2%:Q 3%:Q) (Bpt 4%:Q 3%:Q) isT).
-Definition sorted_out := map right_pt (sort_outgoing [:: E4; E5; E6]).
-(*
-Eval lazy in sorted_out.
-*)
 
 
 Lemma pue_formulaE a b c : pue_formula a b c =
@@ -277,8 +92,6 @@ move => <-.
 apply pue_f_triangle_on_edge'.
 Qed.
 
-Definition subpoint (p : pt) :=
-  {| p_x := p_x p; p_y := p_y p - 1 |}.
 
 Lemma edge_and_left_vertical (p q a : pt) :
   p_x p < p_x a -> p_x p = p_x q ->
@@ -342,7 +155,7 @@ Proof.
 apply : (contra_not  (p <<= e) (p <<< e)).
 apply : underW.
 Qed.
-
+(*
 Lemma compare_outgoing_total p : {in [pred e | left_pt e == p] &, total compare_outgoing} .
 Proof.
 rewrite /total.
@@ -393,32 +206,9 @@ rewrite /=.
 move => p s.
 apply /sort_sorted_in /compare_incoming_total.
 Qed.
-
-Definition valid_edge e p := (p_x (left_pt e) <= p_x p) && (p_x p <= p_x (right_pt e)).
-Definition valid_cell c x := (valid_edge (low c) x) /\ (valid_edge (high c) x).
-
-
-Definition point_on_edge (p: pt) (e :edge) : bool :=
-  (pue_formula p (left_pt e) (right_pt e) == 0) && (valid_edge e p).
-
-Notation "p '===' e" := (point_on_edge p e)( at level 70, no associativity).
-
-Definition edge_below (e1 : edge) (e2 : edge) : bool :=
-((left_pt e1 <<= e2) && (right_pt e1 <<= e2))
-|| (~~  (left_pt e2 <<< e1) && ~~ (right_pt e2<<< e1)).
-
-Definition below_alt (e1 : edge) (e2 : edge) :=
-  edge_below e1 e2 \/ edge_below e2 e1.
-
+*)
 Lemma below_altC e1 e2 : below_alt e1 e2 <-> below_alt e2 e1.
 Proof. by rewrite /below_alt or_comm. Qed.
-
-Definition no_crossing := forall e1 e2, below_alt e1 e2.
-
-Notation "e1 '<|' e2" := (edge_below e1 e2)( at level 70, no associativity).
-
-Definition right_form (c : cell) : bool :=
-  (low c) <| (high c).
 
 Lemma left_on_edge e :
 (left_pt e) === e.
@@ -543,13 +333,6 @@ Qed.
 
 (* returns the point of the intersection between a vertical edge
  intersecting p and the edge e if it exists, None if it doesn't *)
-
-Definition vertical_intersection_point (p : pt) (e : edge) : option pt :=
-
-  if valid_edge e p then Some(Bpt (p_x p) (((p_x p) - p_x (left_pt e))
-   * (((p_y (right_pt e)) - p_y (left_pt e)) /
-    ((p_x (right_pt e)) - p_x (left_pt e))) + p_y (left_pt e)))
-    else None.
 
 Lemma vertical_none p e :
   ~~ valid_edge e p -> vertical_intersection_point p e = None.
@@ -1141,116 +924,8 @@ valid_edge (low c) p -> valid_edge (high c) p ->
 p <<< (low c) ->  p <<< (high c).
 Proof. apply: order_edges_strict_viz_point'. Qed.
 
-Definition dummy_pt := Bpt 0%:Q 0%:Q.
-Definition dummy_event := Bevent dummy_pt [::].
-Definition dummy_edge : edge := (@Bedge  dummy_pt (Bpt 1%:Q 0%:Q) isT).
-Definition dummy_cell : cell := (@Bcell  (dummy_pt::[::]) (dummy_pt::[::]) dummy_edge dummy_edge).
-
-(* if a cell doesn't contain a point, then either both edges are strictly under p or strictly over p *)
-Definition contains_point (p : pt) (c : cell)  : bool :=
-   ~~  (p <<< low c) && (p <<= (high c)).
-
-Definition inside_open_cell p c :=
-  contains_point p c && (p_x (last dummy_pt (left_pts c)) <= p_x p).
-
-Definition inside_closed_cell p c :=
-  contains_point p c && (p_x (last dummy_pt (left_pts c)) <= p_x p) && ( p_x p <= p_x (last dummy_pt (right_pts c))).
-
-Fixpoint contains (A : eqType) (s : seq A) (a : A) : bool :=
-   match s with
-     | [::] => false
-     | b :: m => (b == a) || (contains m a)
-   end.
 
 
-(* this function removes consecutives duplicates, meaning the seq needs to be sorted first if we want to remove all duplicates *)
-Fixpoint no_dup_seq (A : eqType) (s : seq A) : (seq A) :=
-  match s with
-  | [::] => [::]
-  | a::q => match q with
-            | [::] => s
-            | b::r => if a == b then no_dup_seq q else a::(no_dup_seq q)
-            end
-    end.
-
-Fixpoint closing_rest (p: pt) (rest : seq cell) : (seq cell) :=
-    match rest with
-       | [::] => [::]
-       | [:: c] => let op1 := vertical_intersection_point p (high c) in
-                    match op1 with
-                       | None => [::]
-                       | Some(p1) =>
-                        Bcell  (left_pts c) (no_dup_seq [:: p; p1]) (low c) (high c)::[::]
-                    end
-       | c::q =>  Bcell  (left_pts c) [::p] (low c) (high c)::closing_rest p q
-    end.
-
-
-Definition closing_cells (p : pt) (contact_cells: seq cell) : (seq cell) :=
-    match contact_cells with
-      | [::] => [::]
-      | [:: only_cell] =>
-                      let op0 := vertical_intersection_point p (low only_cell) in
-                      let op1 := vertical_intersection_point p (high only_cell) in
-                      match (op0,op1) with
-                          |(None,_) |(_,None)=> [::]
-                          |(Some(p0),Some(p1)) =>
-                              Bcell  (left_pts only_cell) (no_dup_seq [:: p0; p; p1])(low only_cell) (high only_cell)::[::]
-                      end
-      | c::q => let op0 := vertical_intersection_point p (low c) in
-                    match op0 with
-                       | None => [::]
-                       | Some(p0) =>
-                        Bcell  (left_pts c) (no_dup_seq [:: p0; p]) (low c) (high c) :: (closing_rest p q)
-                    end
-    end.
-
-
-Fixpoint open_cells_decomposition_contact open_cells pt contact high_e : seq cell * seq cell * edge :=
-match open_cells with
-        | [::] => (contact, [::], high_e)
-        | Bcell lpt rpt low high :: q  =>
-                if (contains_point pt (Bcell lpt rpt low high)) then
-                    open_cells_decomposition_contact q pt (rcons contact (Bcell lpt rpt low high)) high
-                else (contact, open_cells, high_e)
-        end.
-
-Fixpoint open_cells_decomposition_fix open_cells pt first_cells : seq cell * seq cell * seq cell * edge * edge :=
-
-match open_cells with
-        | [::] => (first_cells, [::], [::], dummy_edge, dummy_edge)
-        | Bcell lpt rpt low high :: q  =>
-            if (contains_point pt (Bcell lpt rpt low high)) then
-                   let '(contact, last_cells, high_e) := open_cells_decomposition_contact q pt [::] high in
-                   (first_cells, (Bcell lpt rpt low high)::contact,last_cells, low, high_e)
-            else open_cells_decomposition_fix q pt (rcons first_cells ( Bcell lpt rpt low high))
-end.
-
-(* only works if cells are sorted *)
-Definition open_cells_decomposition (open_cells : seq cell) (p : pt) : seq cell * seq cell * seq cell * edge * edge :=
-  match open_cells with
-    | [::] => ([::],[::],[::], dummy_edge, dummy_edge)
-    | _  => open_cells_decomposition_fix open_cells p [::]
-  end.
-(* at each step we create the cell under the first outgoing edge and when there's only one left,
-we create the two last cells *)
-Fixpoint opening_cells (p : pt) (out : seq edge) (low_e : edge) (high_e : edge) : (seq cell) :=
-
-      match out with
-    | [::] => let op0 := vertical_intersection_point p low_e in
-              let op1 := vertical_intersection_point p high_e in
-                      match (op0,op1) with
-                          |(None,_) |(_,None)=> [::]
-                          |(Some(p0),Some(p1)) =>
-                              (Bcell  (no_dup_seq ([:: p1; p; p0])) [::] low_e high_e) ::[::]
-                      end
-    | c::q => let op0 := vertical_intersection_point p low_e in
-                    match op0 with
-                       | None => [::]
-                       | Some(p0) =>
-                        (Bcell  (no_dup_seq([:: p; p0])) [::] low_e c) :: opening_cells p q c high_e
-                    end
-end.
 (*
 Fixpoint extract_h (cells : seq cell) (high_e : edge) : edge :=
   match cells with
@@ -1264,36 +939,18 @@ Definition extract_l_h_edges (cells : seq cell) : edge * edge :=
     | c::q => (low c, extract_h q (high c))
 end.
 
-*)
 
-(*
 Fixpoint extract_last_cell (open_cells : seq cell) (contact_cells : seq cell) : seq cell  :=
   match open_cells with
     | [::] => [::]
     | c::q => if (contains contact_cells c) then [:: c] else extract_last_cell q contact_cells
-  end.
-*)
-Definition step (e : event) (open_cells : seq cell) (closed_cells : seq cell) : (seq cell) * (seq cell) :=
-   let p := point e in
-   let '(first_cells, contact_cells, last_cells, lower_edge, higher_edge) := open_cells_decomposition open_cells p in
-  (* let (lower_edge, higher_edge) := extract_l_h_edges contact_cells in *)
-   let closed := closing_cells p contact_cells in
-   let closed_cells := closed_cells++closed in
-   let new_open_cells :=
-     opening_cells p (sort edge_below (outgoing e)) lower_edge higher_edge in
-   (first_cells++new_open_cells++last_cells, closed_cells).
-
-   Fixpoint scan (events : seq event) (open_cells : seq cell) (closed_cells : seq cell) : seq cell :=
-    match events with
-       | [::] => closed_cells
-       | e::q => let (open, closed) := (step e open_cells closed_cells) in  scan q open closed
   end.
 
 
  Definition get_high_low x low high : rat * rat :=
  if x < low then (x, high) else if high < x then (low, x) else (low, high).
 
- (*
+ 
  Fixpoint search_l_h_edges (events : seq event) (low_x : rat) (high_x : rat) (low_y : rat) (high_y : rat) (proof : low_x < high_x): edge*edge :=
    match events with
    | [::] => (@Bedge (Bpt (low_x - 1%:Q) (low_y - 1%:Q)) (Bpt (high_x + 1%:Q) (low_y - 1%:Q)) _, @Bedge (Bpt (low_x - 1%:Q) (high_y + 1%:Q)) (Bpt (high_x + 1%:Q) (high_y + 1%:Q)) _)
@@ -1311,26 +968,24 @@ Definition step (e : event) (open_cells : seq cell) (closed_cells : seq cell) : 
 
  *)
 
- Definition start (events : seq event) (bottom : edge) (top : edge) : seq cell :=
-     match events with
-       | [::] => [::]
-       | e :: q =>
-           let p := point e in let out := outgoing e in
-            scan q (opening_cells p out bottom top) [::]
-       end.
+
 
 Section proof_environment.
 Variable bottom top : edge.
 
 
-Definition lexPt (p1 p2 : pt) : bool :=
-  (p_x p1 < p_x p2) || ((p_x p1 == p_x p2) && (p_y p1 < p_y p2)).
-
-Definition lexePt (p1 p2 : pt) : bool :=
-    (p_x p1 < p_x p2) || ((p_x p1 == p_x p2) && (p_y p1 <= p_y p2)).
-
-Definition lexPtEv (e1 e2 : event) : bool :=
-  lexPt (point e1) (point e2).
+Definition inside_box p :=
+  (~~ (p <<= bottom)  && (p <<< top) ) &&
+    (valid_edge bottom p && valid_edge top p).
+    
+Definition end_edge edge events : bool :=
+  (edge \in [:: top; bottom]) || has (event_close_edge edge) events.
+  
+Definition close_alive_edges open future_events : bool :=
+  all (fun c => (end_edge (low c) future_events) && (end_edge (high c) future_events)) open.
+  
+Definition close_out_from_event ev future : bool :=
+    all (fun edge => end_edge edge future) (outgoing ev).
 
 Lemma lexPtW p1 p2 :
   lexPt p1 p2 -> lexePt p1 p2.
@@ -1340,22 +995,7 @@ rewrite ltW //.
 by rewrite orbT.
 Qed.
 
-Definition inside_box p :=
-(~~ (p <<= bottom)  && (p <<< top) ) &&
-  (valid_edge bottom p && valid_edge top p).
 
-
-Definition event_close_edge ed ev : bool :=
-right_pt ed == point ev.
-
-Definition end_edge edge events : bool :=
-(edge \in [:: top; bottom]) || has (event_close_edge edge) events.
-
-Definition close_alive_edges open future_events : bool :=
-all (fun c => (end_edge (low c) future_events) && (end_edge (high c) future_events)) open.
-
-Definition close_out_from_event ev future : bool :=
-  all (fun edge => end_edge edge future) (outgoing ev).
 
 Fixpoint close_edges_from_events events : bool :=
   match events with
@@ -1593,17 +1233,6 @@ move : xin => /orP [ /eqP xeqp | xinq2].
 by exists x.
 Qed.
 
-Fixpoint adjacent_cells_aux open e : bool :=
-  match open with
-  | [::] => true
-  | a::q => (e == low a) && adjacent_cells_aux q (high a)
-  end.
-
-Definition adjacent_cells open : bool :=
-  match open with
-  | [::] => true
-  | b::q => adjacent_cells_aux q (high b)
-  end.
 
 Lemma l_h_c_decomposition open_cells pt :
 forall first_cells contact last_cells low_f high_f,
@@ -1622,7 +1251,7 @@ rewrite /open_cells_decomposition .
 move => h.
 by have  := (l_h_c_fix h).
 Qed.
-
+(*
 Definition edge_above_vert (e1 : edge) (e2 : edge) : bool :=
 let: Bedge a1 b1 p1 := e1 in
 let: Bedge a2 b2 p2 := e2 in
@@ -1637,7 +1266,7 @@ match vertical_intersection_point (Bpt maxleft 0%Q) e1 with
   (p <<= e2) && (p2 <<= e2)
   end
 end.
-
+*)
 Definition bottom_edge_seq_above (s : seq cell) (p : pt) :=
   if s is c :: _ then (p) <<= (low c) else true.
 
@@ -1786,14 +1415,6 @@ p <<= (low c) ->  p <<= (high c).
 Proof.
 
 *)
-
-Definition s_right_form (s : seq cell)  : bool :=
-  all (fun c => right_form c ) s.
-
-
-Definition seq_valid (s : seq cell) (p : pt) : bool :=
-    all (fun c => (valid_edge (low c) p) && (valid_edge (high c) p)) s.
-
 
 Lemma insert_opening_valid first_cells new_open_cells last_cells p :
 seq_valid first_cells p -> seq_valid  new_open_cells p ->
@@ -2138,9 +1759,6 @@ move : valid.
 by rewrite /vertical_intersection_point validl.
 Qed.
 
-Definition out_left_event ev :=
-  forall e,
-  e \in (outgoing ev) -> left_pt e == point(ev).
 
 Lemma valid_edge_extremities e0 p:
 (left_pt e0 == p) || (right_pt e0 == p) ->
@@ -2369,17 +1987,6 @@ rewrite /=.
 rewrite end_low end0 /=.
 apply : Ho => //.
 Qed.
-
-Definition adj_rel := [rel x y : cell | high x == low y].
-
-Lemma adj_aux_path (x : cell) s :
-    adjacent_cells_aux s (high x) = path adj_rel x s.
-Proof.
-by elim: s x => [// | y s Ih] x /=; rewrite Ih.
-Qed.
-
-Definition adjacent_cells' open : bool :=
-    sorted adj_rel open.
 
 Lemma adjacent_cell'_eq open : adjacent_cells' open = adjacent_cells open.
 Proof.
@@ -3247,11 +2854,6 @@ by rewrite subr_cp0.
 
 Qed.
 
-Definition no_crossing'  : Prop:=
- forall e e',
- valid_edge e (left_pt e') ->
-(left_pt e' <<< e  -> e' <| e)  /\
-(~ (left_pt e' <<= e)  -> e <| e').
 
 Lemma no_crossingE e1 e2 :
   below_alt e1 e2 -> valid_edge e2 (left_pt e1) ->
